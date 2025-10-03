@@ -35,7 +35,7 @@ class CoolLanguageModelWowExclamationMark(nn.Module):
 
     def reset_parameters(self):
         nn.init.normal_(self.embedding.weight, mean=0.0, std=0.02)
-        torch.nn.init.uniform_(self.shared_tversky_features, -0.02, 0.03)
+        torch.nn.init.uniform_(self.shared_tversky_features, -0.1, 0.1)
 
     def get_embeddings(self, input_ids, cu_seqlens=None, max_seqlen=None):
         """

@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from einops import rearrange
 
 class TverskyLayer(nn.Module):
     def __init__(self,
@@ -10,8 +9,7 @@ class TverskyLayer(nn.Module):
         features: int | nn.Parameter,
         prototype_init=None,
         feature_init=None,
-        chunk_size=None,
-        approximate_sharpness=30
+        approximate_sharpness=13
     ):
         super().__init__()
 
@@ -32,7 +30,6 @@ class TverskyLayer(nn.Module):
         self.alpha = nn.Parameter(torch.zeros(1))
         self.beta = nn.Parameter(torch.zeros(1))
         self.theta = nn.Parameter(torch.zeros(1))
-        self.chunk_size = chunk_size
 
         self.prototype_init = prototype_init
         self.feature_init = feature_init
@@ -46,30 +43,50 @@ class TverskyLayer(nn.Module):
         if self.prototype_init is not None:
             self.prototype_init(self.prototypes)
 
+        nn.init.uniform_(self.alpha, 0.004, 0.25)
+        nn.init.uniform_(self.beta, 0.001, 0.004)
+        nn.init.uniform_(self.theta, 0.07, 0.13)
+
     # Shifted indicator since we need a differentiable signal > 0 but binary mask is not such a thing.
     def indicator(self, x):
-        return (torch.tanh(self.approximate_sharpness * x) + 1) / 2
+        sigma = (torch.tanh(self.approximate_sharpness * x) + 1) * 0.5
+        weighted = x * sigma
+        return weighted, sigma
 
     # Ignorematch with Product intersections
     def forward(self, x):
         B = x.size(0)
+        P = self.prototypes.size(0)
 
-        # [B,d] @ [d,F] = [B,F] and [P,d] @ [d,F] = [P,F]
-        A = x @ self.features.T          # [B, F]
-        Pi = self.prototypes @ self.features.T  # [P, F]
+        A = x @ self.features.T                    # [B, F]
+        Pi = self.prototypes @ self.features.T     # [P, F]
 
-        sigma_A = self.indicator(A)      # [B, F]
-        sigma_Pi = self.indicator(Pi)    # [P, F]
+        weighted_A, sigma_A = self.indicator(A)
+        weighted_Pi, sigma_Pi = self.indicator(Pi)
 
-        weighted_A = A * sigma_A         # [B, F]
-        weighted_Pi = Pi * sigma_Pi      # [P, F]
+        theta_val = self.theta.item()
+        alpha_val = self.alpha.item()
+        beta_val = self.beta.item()
 
-        common = weighted_A @ weighted_Pi.T            # [B,F] @ [F,P] = [B,P]
+        # theta * (weighted_A @ weighted_Pi.T)
+        result = torch.addmm(
+            torch.empty(B, P, device=x.device, dtype=x.dtype),
+            weighted_A, weighted_Pi.T,
+            beta=0, alpha=theta_val
+        )
 
-        # This is an approximation that will not distinguish highly similar features but
-        # is actually tractable for networks larger than a breadbox.
-        distinctive_A = weighted_A @ (1 - sigma_Pi).T  # [B,F] @ [F,P] = [B,P]
-        distinctive_B = (1 - sigma_A) @ weighted_Pi.T  # [B,F] @ [F,P] = [B,P]
+        # - alpha * (weighted_A @ (1 - sigma_Pi).T)
+        result = torch.addmm(
+            result,
+            weighted_A, (1 - sigma_Pi).T,
+            beta=1, alpha=-alpha_val
+        )
 
-        #  S = θ·C - α·D_A - β·D_B
-        return self.theta * common - self.alpha * distinctive_A - self.beta * distinctive_B # [B, P]
+        # beta * ((1 - sigma_A) @ weighted_Pi.T)
+        result = torch.addmm(
+            result,
+            (1 - sigma_A), weighted_Pi.T,
+            beta=1, alpha=-beta_val
+        )
+
+        return result

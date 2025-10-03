@@ -20,7 +20,7 @@ class VarlenMHA(nn.Module):
             input_dim=self.hidden_size,
             prototypes=self.hidden_size,
             features=shared_tversky_features,
-            prototype_init=lambda x: torch.nn.init.uniform_(x, -.27, 1),
+            prototype_init=lambda x: torch.nn.init.uniform_(x, -0.15, 0.15),
         )
 
         self.reset_parameters()
