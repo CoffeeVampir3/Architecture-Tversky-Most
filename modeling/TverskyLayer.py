@@ -7,8 +7,8 @@ class TverskyLayer(nn.Module):
         input_dim: int,
         prototypes: int | nn.Parameter,
         features: int | nn.Parameter,
-        prototype_init=None,
-        feature_init=None,
+        prototype_init_scale=None,
+        feature_init_scale=None,
         approximate_sharpness=13
     ):
         super().__init__()
@@ -31,62 +31,34 @@ class TverskyLayer(nn.Module):
         self.beta = nn.Parameter(torch.zeros(1))
         self.theta = nn.Parameter(torch.zeros(1))
 
-        self.prototype_init = prototype_init
-        self.feature_init = feature_init
+        self.prototype_init_scale = prototype_init_scale
+        self.feature_init_scale = feature_init_scale
         self.approximate_sharpness = approximate_sharpness
 
         self.reset_parameters()
 
     def reset_parameters(self):
-        if self.feature_init is not None:
-            self.feature_init(self.features)
-        if self.prototype_init is not None:
-            self.prototype_init(self.prototypes)
-
-        nn.init.uniform_(self.alpha, 0.004, 0.25)
-        nn.init.uniform_(self.beta, 0.001, 0.004)
-        nn.init.uniform_(self.theta, 0.07, 0.13)
-
-    # Shifted indicator since we need a differentiable signal > 0 but binary mask is not such a thing.
-    def indicator(self, x):
-        sigma = (torch.tanh(self.approximate_sharpness * x) + 1) * 0.5
-        weighted = x * sigma
-        return weighted, sigma
+        if self.prototype_init_scale:
+            torch.nn.init.uniform_(self.prototypes, -0.12 * self.prototype_init_scale, 0.12 * self.prototype_init_scale)
+        if self.feature_init_scale:
+            torch.nn.init.uniform_(self.features, -0.04 * self.feature_init_scale, 0.04 * self.feature_init_scale)
 
     # Ignorematch with Product intersections
     def forward(self, x):
         B = x.size(0)
-        P = self.prototypes.size(0)
 
-        A = x @ self.features.T                    # [B, F]
-        Pi = self.prototypes @ self.features.T     # [P, F]
+        # [B,d] @ [d,F] = [B,F] and [P,d] @ [d,F] = [P,F]
+        A = x @ self.features.T          # [B, F]
+        Pi = self.prototypes @ self.features.T  # [P, F]
 
-        weighted_A, sigma_A = self.indicator(A)
-        weighted_Pi, sigma_Pi = self.indicator(Pi)
+        sigma_A = (torch.tanh(self.approximate_sharpness * A) + 1) * 0.5
+        weighted_A = A * sigma_A
 
-        theta_val = self.theta.item()
-        alpha_val = self.alpha.item()
-        beta_val = self.beta.item()
+        sigma_Pi = (torch.tanh(self.approximate_sharpness * Pi) + 1) * 0.5
+        weighted_Pi = Pi * sigma_Pi
 
-        # theta * (weighted_A @ weighted_Pi.T)
-        result = torch.addmm(
-            torch.empty(B, P, device=x.device, dtype=x.dtype),
-            weighted_A, weighted_Pi.T,
-            beta=0, alpha=theta_val
-        )
-
-        # - alpha * (weighted_A @ (1 - sigma_Pi).T)
-        result = torch.addmm(
-            result,
-            weighted_A, (1 - sigma_Pi).T,
-            beta=1, alpha=-alpha_val
-        )
-
-        # beta * ((1 - sigma_A) @ weighted_Pi.T)
-        result = torch.addmm(
-            result,
-            (1 - sigma_A), weighted_Pi.T,
-            beta=1, alpha=-beta_val
-        )
-
-        return result
+        return (self.theta * (weighted_A @ weighted_Pi.T)
+                + self.alpha * (weighted_A @ sigma_Pi.T)
+                + self.beta * (sigma_A @ weighted_Pi.T)
+                - self.alpha * weighted_A.sum(dim=-1, keepdim=True)
+                - self.beta * weighted_Pi.sum(dim=-1).unsqueeze(0)) # [B, P]

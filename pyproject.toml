@@ -5,20 +5,29 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "torch>=2.8.0",
+    "setuptools",
+    "ninja",
+    "packaging",
     "cut-cross-entropy",
     "datasets>=4.0.0",
-    "flash-attn>=2.8.3",
     "matplotlib>=3.10.6",
     "numpy>=2.3.3",
     "safetensors>=0.6.2",
     "tensorboardx>=2.6.4",
-    "torch>=2.8.0",
     "transformers>=4.56.1",
+    "flash-attn>=2.8.3",
+    "muon-optimizer",
 ]
 
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
 
+[tool.uv]
+prerelease = "allow"
+no-build-isolation-package = ["flash-attn"]
+
 [tool.uv.sources]
 cut-cross-entropy = { git = "https://github.com/apple/ml-cross-entropy.git" }
+muon-optimizer = { git = "https://github.com/CoffeeVampir3/NorMuon" }

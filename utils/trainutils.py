@@ -138,6 +138,48 @@ class TBLogger:
             if should_log_detailed:
                 self._log_model_stats(model, step)
 
+
+    def _log_tversky_params(self, model, step):
+        for name, param in model.named_parameters():
+            if any(tversky_param in name for tversky_param in ['alpha', 'beta', 'theta']):
+                layer_match = re.search(r'layers\.(\d+)', name)
+
+                if layer_match:
+                    layer_num = int(layer_match.group(1))
+
+                    if 'alpha' in name:
+                        param_name = 'alpha'
+                    elif 'beta' in name:
+                        param_name = 'beta'
+                    elif 'theta' in name:
+                        param_name = 'theta'
+                    else:
+                        continue
+
+                    param_value = param.detach().item()
+                    self.writers['parameters'].add_scalar(
+                        f"tversky/layer_{layer_num}/{param_name}",
+                        param_value,
+                        step
+                    )
+
+                elif 'output_layer' in name:
+                    if 'alpha' in name:
+                        param_name = 'alpha'
+                    elif 'beta' in name:
+                        param_name = 'beta'
+                    elif 'theta' in name:
+                        param_name = 'theta'
+                    else:
+                        continue
+
+                    param_value = param.detach().item()
+                    self.writers['parameters'].add_scalar(
+                        f"tversky/output_layer/{param_name}",
+                        param_value,
+                        step
+                    )
+
     def _log_model_stats(self, model, step):
         grad_norm_sum = 0.0
         grad_mean_sum = 0.0
@@ -248,6 +290,8 @@ class TBLogger:
 
         if total_params > 0:
             self.writers['gradients'].add_scalar("problematic_pct", 100.0 * problematic_grads / total_params, step)
+
+        self._log_tversky_params(model, step)
 
     def close(self):
         for writer in self.writers.values():

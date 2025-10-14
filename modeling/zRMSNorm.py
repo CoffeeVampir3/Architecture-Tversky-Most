@@ -3,10 +3,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class ZeroCenteredRMSNorm(nn.Module):
-    def __init__(self, dim: int, eps: float = 1e-4):
+    def __init__(self, dim: int, eps: float = 1e-6):
         super().__init__()
         self.eps = eps
         self.weight = nn.Parameter(torch.zeros(dim))
+
+    # def forward(self, x):
+    #     return torch.asinh(
+    #         x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+    #     )
 
     def forward(self, x):
         norm = x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
