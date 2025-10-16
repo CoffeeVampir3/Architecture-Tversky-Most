@@ -24,7 +24,7 @@ import torch._inductor.config
 # There's a memory leak related to very specific interactions of AMP + flash attn varlen + Tversky O projections.
 # The exact nature is unclear to me but these settings (specifically the dyanic graph one) prevents the leak.
 # The expandable segments seems to reduce the overall allocation size
-os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+os.environ['PYTORCH_ALLOC_CONF'] = 'expandable_segments:True'
 torch._inductor.config.triton.cudagraph_skip_dynamic_graphs = True
 
 #torch.autograd.set_detect_anomaly(True)
@@ -135,7 +135,7 @@ def build_muon_optimizer(model, muon_lr=0.02, adam_lr=2e-4):
              lr=adam_lr, betas=(0.9, 0.95), eps=1e-16, weight_decay=1e-4),
         # Slow down tversky scalar overcompensation as this tends to be the overcorrecting term
         dict(params=tversky_scalars, use_muon=False,
-             lr=2e-7, betas=(0.9, 0.95), eps=1e-16),
+             lr=2e-5, betas=(0.9, 0.95), eps=1e-16),
         dict(params=adam_decay_params, use_muon=False,
              lr=adam_lr, betas=(0.9, 0.95), eps=1e-16, weight_decay=1e-5),
         dict(params=adam_no_decay_params, use_muon=False,

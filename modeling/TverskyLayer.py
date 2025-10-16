@@ -52,16 +52,6 @@ class TverskyLayer(nn.Module):
         nn.init.uniform_(self.beta, -0.05, 0.05)
         nn.init.uniform_(self.theta, -0.1, 0.1)
 
-    def indicator(self, x):
-        # Forward
-        sigma_hard = (x > 0).to(x.dtype)
-
-        # STE
-        sigma_smooth = torch.sigmoid(self.approximate_sharpness * x)
-        sigma = sigma_smooth + (sigma_hard - sigma_smooth).detach()
-        weighted = x * sigma
-        return weighted, sigma
-
     def forward(self, x):
         B = x.size(0)
 
@@ -77,11 +67,47 @@ class TverskyLayer(nn.Module):
         weighted_A, sigma_A = self.indicator(A)
         weighted_Pi, sigma_Pi = self.indicator(Pi)
 
-        return (self.theta * (weighted_A @ weighted_Pi.T)
+        result = (self.theta * (weighted_A @ weighted_Pi.T)
                 + self.alpha * (weighted_A @ sigma_Pi.T)
                 + self.beta * (sigma_A @ weighted_Pi.T)
                 - self.alpha * weighted_A.sum(dim=-1, keepdim=True)
                 - self.beta * weighted_Pi.sum(dim=-1).unsqueeze(0)) # [B, P]
+
+        # Patch job, amp seems to struggle to cast to the correct dtype here.
+        return result.to(torch.bfloat16)
+
+    def indicator(self, x):
+        # Forward
+        sigma_hard = (x > 0).to(x.dtype)
+
+        # STE
+        sigma_smooth = torch.sigmoid(self.approximate_sharpness * x)
+        sigma = sigma_smooth + (sigma_hard - sigma_smooth).detach()
+
+        # Exploit hot cache of sigma and maybe x
+        weighted = x * sigma
+        return weighted, sigma
+
+    # def forward(self, x):
+    #     B = x.size(0)
+
+    #     features_norm = torch.asinh(self.features).T
+    #     prototype_norm = torch.asinh(self.prototypes)
+
+    #     # [B,d] @ [d,F] = [B,F] and [P,d] @ [d,F] = [P,F]
+    #     A = x @ features_norm        # [B, F]
+    #     Pi = prototype_norm @ features_norm  # [P, F]
+
+    #     weighted_A, sigma_A = self.indicator(A)     # both [B, F]
+    #     weighted_Pi, sigma_Pi = self.indicator(Pi)  # both [P, F]
+
+    #     common = weighted_A @ weighted_Pi.T            # [B,F] @ [F,P] = [B,P]
+
+    #     distinctive_A = weighted_A @ (1 - sigma_Pi).T  # [B,F] @ [F,P] = [B,P]
+    #     distinctive_B = (1 - sigma_A) @ weighted_Pi.T  # [B,F] @ [F,P] = [B,P]
+
+    #     #  S = θ·C - α·D_A - β·D_B
+    #     return self.theta * common - self.alpha * distinctive_A - self.beta * distinctive_B # [B, P]
 
     #Ignorematch with Product intersections
     # def forward(self, x):
