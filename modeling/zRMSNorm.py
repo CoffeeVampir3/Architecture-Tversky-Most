@@ -15,5 +15,5 @@ class ZeroCenteredRMSNorm(nn.Module):
 
     def forward(self, x):
         norm = x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
-        output = norm * (1.0 + self.weight.float())
+        output = norm * (1.0 + self.weight)
         return output - output.mean(-1, keepdim=True)

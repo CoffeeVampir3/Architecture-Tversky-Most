@@ -20,3 +20,5 @@ checkpoints/
 model.safetensors
 models/
 logs/
+dataset/
+t.py

@@ -59,7 +59,9 @@ def compute_varlen_loss_with_cce(model, concatenated_input_ids, cu_seqlens, sequ
     torch.cumsum(input_lengths_tensor, dim=0, out=cu_seqlens_shifted[1:])
     max_seqlen_shifted = input_lengths_tensor.max().item()
 
-    embeddings = model.get_embeddings(model_inputs, cu_seqlens=cu_seqlens_shifted, max_seqlen=max_seqlen_shifted)
+    with autocast(device_type='cuda', dtype=torch.bfloat16):
+        embeddings = model.get_embeddings(model_inputs, cu_seqlens=cu_seqlens_shifted, max_seqlen=max_seqlen_shifted)
+
     classifier_weights = model.get_classifier_weights()
 
     # linear_cross_entropy(..., shift=1) incompatible with varlen because it would create
@@ -191,7 +193,7 @@ def defrag_cuda():
 def train(model, train_dataset, tokenizer, num_epochs=1, batch_size=72, learning_rate=1e-4):
     device = torch.device("cuda")
     model.to(device)
-    optimizer = build_muon_optimizer(model, muon_lr=1e-4, adam_lr=learning_rate)
+    optimizer = build_muon_optimizer(model, muon_lr=1e-3, adam_lr=learning_rate)
 
     logger = TBLogger(
         log_dir='logs/current_run',
@@ -276,7 +278,7 @@ def main():
 
     model = CoolLanguageModelWowExclamationMark(config)
 
-    #torch.compile(model, mode="max-autotune", backend="eager")
+    torch.compile(model, mode="max-autotune")
     print(f"Model parameters: {sum(p.numel() for p in model.parameters()):,}")
 
     train(model, train_dataset, tokenizer)

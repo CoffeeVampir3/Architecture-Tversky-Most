@@ -30,7 +30,8 @@ class SharedTverskyBlock(nn.ModuleList):
         self.shared_features = nn.Parameter(
             torch.zeros(config.tversky_num_features, config.hidden_size)
         )
-        torch.nn.init.uniform_(self.shared_features, -0.1 * scale_factor, 0.1 * scale_factor)
+        unit_scale = (3.0 / self.shared_features.size(1)) ** 0.5
+        torch.nn.init.uniform_(self.shared_features, -unit_scale * scale_factor, unit_scale * scale_factor)
         layers = [
             DecoderLayer(
                 config,
@@ -58,6 +59,22 @@ class CoolLanguageModelWowExclamationMark(nn.Module):
                 DecoderLayer(config, layer_idx=i, tversky=False)
             )
         idx += num_initial_decoders
+
+        # for i in range(num_initial_decoders):
+        #     self.layers.append(
+        #         DecoderLayer(config, layer_idx=i, tversky=True)
+        #     )
+        # idx += num_initial_decoders
+
+        # for i in range(4):
+        #     self.layers.append(
+        #         DecoderLayer(config, layer_idx=i, tversky=False)
+        #     )
+
+        # self.output_layer = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
+        # self.output_layer.weight = self.embedding.weight
+        # self.reset_parameters()
+        # return
 
         # self.output_layer = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
         # self.output_layer.weight = self.embedding.weight

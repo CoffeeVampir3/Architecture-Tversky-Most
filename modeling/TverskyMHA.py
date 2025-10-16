@@ -21,24 +21,33 @@ class TverskyVarlenMHA(nn.Module):
         # )
 
         self.w_q = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
-        self.w_k = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
-        self.w_v = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
-        # Output projection uses global shared features (if provided)
-        self.w_o = TverskyLayer(
+        self.w_k = TverskyLayer(
             input_dim=self.hidden_size,
             prototypes=self.hidden_size,
             features=block_shared_tversky_features,
             prototype_init_scale=self.scale_factor,
+            #feature_init_scale=self.scale_factor
+        )
+        self.w_v = TverskyLayer(
+            input_dim=self.hidden_size,
+            prototypes=self.hidden_size,
+            features=block_shared_tversky_features,
+            prototype_init_scale=self.scale_factor,
+            #feature_init_scale=self.scale_factor
         )
 
-        #torch.nn.init.uniform_(self.qkv_shared_features, -0.1 * self.scale_factor, 0.1 * self.scale_factor)
+        self.w_o = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
         self.gate_proj = nn.Linear(self.hidden_size, self.n_heads, bias=False)
-        nn.init.zeros_(self.gate_proj.weight)
-        nn.init.normal_(self.w_q.weight, mean=0.0, std=0.0013 * self.scale_factor)
-        nn.init.normal_(self.w_k.weight, mean=0.0, std=0.0013 * self.scale_factor)
-        nn.init.normal_(self.w_v.weight, mean=0.0, std=0.0013 * self.scale_factor)
 
-    @torch.compiler.disable
+    def reset_parameters(self):
+        nn.init.zeros_(self.gate_proj.weight)
+        unit_scale = (3.0 / self.hidden_size) ** 0.5
+
+        # [ln(x + 1) / 2] + 1 -> ~[1, 2.5] scale factor for 0-23
+        full_scale = unit_scale * self.scale_factor
+        nn.init.uniform_(self.w_o.weight, -full_scale, full_scale)
+        nn.init.uniform_(self.w_q.weight, -full_scale, full_scale)
+
     def forward(self, x, cu_seqlens=None, max_seqlen=None):
         q = self.w_q(x)
         k = self.w_k(x)

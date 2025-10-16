@@ -10,8 +10,6 @@ class VarlenMHA(nn.Module):
         self.n_heads = config.n_attn_heads
 
         assert self.hidden_size % self.n_heads == 0
-
-        # [ln(x + 1) / 2] + 1 -> ~[1, 2.5] scale factor for 0-23
         self.scale_factor = ((torch.log(torch.tensor(layer_idx + 1, dtype=torch.float)) / 2) + 1).item()
 
         self.w_q = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
@@ -25,10 +23,14 @@ class VarlenMHA(nn.Module):
 
     def reset_parameters(self):
         nn.init.zeros_(self.gate_proj.weight)
-        nn.init.normal_(self.w_o.weight, mean=0.0, std=0.004 * self.scale_factor)
-        nn.init.normal_(self.w_q.weight, mean=0.0, std=0.003 * self.scale_factor)
-        nn.init.normal_(self.w_k.weight, mean=0.0, std=0.003 * self.scale_factor)
-        nn.init.normal_(self.w_v.weight, mean=0.0, std=0.003 * self.scale_factor)
+        unit_scale = (3.0 / self.hidden_size) ** 0.5
+
+        # [ln(x + 1) / 2] + 1 -> ~[1, 2.5] scale factor for 0-23
+        full_scale = unit_scale * self.scale_factor
+        nn.init.uniform_(self.w_o.weight, -full_scale, full_scale)
+        nn.init.uniform_(self.w_q.weight, -full_scale, full_scale)
+        nn.init.uniform_(self.w_k.weight, -full_scale, full_scale)
+        nn.init.uniform_(self.w_v.weight, -full_scale, full_scale)
 
     def forward(self, x, cu_seqlens=None, max_seqlen=None):
         q = self.w_q(x)
