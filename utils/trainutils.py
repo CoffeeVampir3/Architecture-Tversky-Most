@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
+import random
 from tensorboardX import SummaryWriter
-from safetensors.torch import save_file, load_file
+from safetensors.torch import save_model, load_model
 from pathlib import Path
 import time
 from collections import defaultdict
@@ -28,21 +29,36 @@ def count_parameters_layerwise(model):
 
     return total_params
 
-def save_checkpoint(model, optimizer, filename="checkpoint.safetensors"):
-    if hasattr(model, '_orig_mod'):
-        model_state = model._orig_mod.state_dict()
-    else:
-        model_state = model.state_dict()
+def save_checkpoint(model, optimizer, global_step, epoch, filename="checkpoint"):
+    save_model(model, f"{filename}_model.safetensors")
+    checkpoint_dict = {
+        'optimizer_state_dict': optimizer.state_dict(),
+        'global_step': global_step,
+        'epoch': epoch,
+        'rng_state': torch.get_rng_state(),
+        'cuda_rng_state': torch.cuda.get_rng_state(),
+        'python_rng_state': random.getstate(),
+    }
+    torch.save(checkpoint_dict, f"{filename}_optimizer.pt")
 
-    save_file(model_state, filename)
+def load_checkpoint(model, optimizer=None, filename="checkpoint", resume_training=True):
+    load_model(model, f"{filename}_model.safetensors")
 
-def load_checkpoint(model, optimizer, filename="checkpoint.safetensors"):
-    model_state = load_file(filename)
+    if optimizer is None:
+        return None
 
-    if hasattr(model, '_orig_mod'):
-        model._orig_mod.load_state_dict(model_state)
-    else:
-        model.load_state_dict(model_state)
+    checkpoint = torch.load(f"{filename}_optimizer.pt", weights_only=False)
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+    if resume_training:
+        torch.set_rng_state(checkpoint['rng_state'])
+        torch.cuda.set_rng_state(checkpoint['cuda_rng_state'])
+        random.setstate(checkpoint['python_rng_state'])
+
+    return {
+        'global_step': checkpoint['global_step'],
+        'epoch': checkpoint['epoch']
+    }
 
 class TBLogger:
     def __init__(self, log_dir='logs/current_run', flush_secs=10, enable_detailed_logging=True, detailed_frequency=10):

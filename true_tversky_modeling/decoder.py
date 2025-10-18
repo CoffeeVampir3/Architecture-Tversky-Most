@@ -3,13 +3,14 @@ import torch.nn as nn
 
 from .MHA import VarlenMHA
 from .TverskyMHA import TverskyVarlenMHA
+from .MLA import VarlenMLA
 from .mlp import LlamaMLP
 from .zRMSNorm import ZeroCenteredRMSNorm
 
 class DecoderLayer(nn.Module):
-    def __init__(self, config, layer_idx, variant, **kwargs):
+    def __init__(self, config, layer_idx, tversky, **kwargs):
         super().__init__()
-        self.self_attn = TverskyVarlenMHA(config, layer_idx, **kwargs) if variant else VarlenMHA(config, layer_idx, **kwargs)
+        self.self_attn = TverskyVarlenMHA(config, layer_idx, **kwargs) if tversky else VarlenMHA(config, layer_idx, **kwargs)
         self.mlp = LlamaMLP(config, layer_idx)
         self.input_layernorm = ZeroCenteredRMSNorm(config.hidden_size)
         self.post_attention_layernorm = ZeroCenteredRMSNorm(config.hidden_size)

@@ -3,10 +3,10 @@ import torch.nn as nn
 from flash_attn import flash_attn_varlen_func
 from einops import rearrange
 
-from .Xorz import Xorz
+from .TverskyLayer import TverskyLayer
 
 class TverskyVarlenMHA(nn.Module):
-    def __init__(self, config, layer_idx=0, feature_dim=128):
+    def __init__(self, config, layer_idx=0, block_shared_tversky_features=None):
         super().__init__()
         self.hidden_size = config.hidden_size
         self.n_heads = config.n_attn_heads
@@ -22,19 +22,25 @@ class TverskyVarlenMHA(nn.Module):
 
         self.w_q = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
         self.w_k = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
-        self.w_v = Xorz(self.scale_factor, input_dim=self.hidden_size, output_dim=self.hidden_size, feature_dim=feature_dim)
-        self.w_o = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
+        self.w_v = nn.Linear(self.hidden_size, self.hidden_size, bias=False)
+        self.w_o = TverskyLayer(
+            input_dim=self.hidden_size,
+            prototypes=self.hidden_size,
+            features=block_shared_tversky_features,
+            prototype_init_scale=self.scale_factor,
+            #feature_init_scale=self.scale_factor
+        )
 
         self.reset_parameters()
 
     def reset_parameters(self):
-        rot = self.scale_factor * 3.0
-        scale = (rot / self.hidden_size) ** 0.5
+        unit_scale = (3.0 / self.hidden_size) ** 0.5
 
         # [ln(x + 1) / 2] + 1 -> ~[1, 2.5] scale factor for 0-23
-        nn.init.uniform_(self.w_q.weight, -scale, scale)
-        nn.init.uniform_(self.w_k.weight, -scale, scale)
-        nn.init.uniform_(self.w_o.weight, -scale, scale)
+        full_scale = unit_scale * self.scale_factor
+        nn.init.uniform_(self.w_q.weight, -full_scale, full_scale)
+        nn.init.uniform_(self.w_k.weight, -full_scale, full_scale)
+        nn.init.uniform_(self.w_v.weight, -full_scale, full_scale)
 
     def forward(self, x, cu_seqlens=None, max_seqlen=None):
         q = self.w_q(x)

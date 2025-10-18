@@ -16,8 +16,8 @@ dependencies = [
     "tensorboardx",
     "transformers",
     "flash-attn",
-    "muon-optimizer",
     "wheel>=0.45.1",
+    "muon-optimizer",
 ]
 
 [tool.pyright]

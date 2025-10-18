@@ -27,9 +27,9 @@ class TverskyLayer(nn.Module):
         else:
             raise ValueError("prototypes must be int or nn.Parameter")
 
-        self.alpha = nn.Parameter(torch.zeros(1, dtype=torch.bfloat16))
-        self.beta = nn.Parameter(torch.zeros(1, dtype=torch.bfloat16))
-        self.theta = nn.Parameter(torch.zeros(1, dtype=torch.bfloat16))
+        self.alpha = nn.Parameter(torch.zeros(1))
+        self.beta = nn.Parameter(torch.zeros(1))
+        self.theta = nn.Parameter(torch.zeros(1))
 
         self.prototype_init_scale = prototype_init_scale
         self.feature_init_scale = feature_init_scale
@@ -73,7 +73,6 @@ class TverskyLayer(nn.Module):
                 - self.alpha * weighted_A.sum(dim=-1, keepdim=True)
                 - self.beta * weighted_Pi.sum(dim=-1).unsqueeze(0)) # [B, P]
 
-        # Patch job, amp seems to struggle to cast to the correct dtype here.
         return result.to(torch.bfloat16)
 
     def indicator(self, x):
