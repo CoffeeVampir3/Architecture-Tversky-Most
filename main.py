@@ -98,9 +98,9 @@ def build_muon_optimizer(model, muon_lr=0.02, adam_lr=2e-4):
         dict(params=muon_params, use_muon=True,
              lr=muon_lr, momentum=0.95, beta2=0.95, weight_decay=1e-1),
         dict(params=adam_1d_params, use_muon=False,
-             lr=adam_lr, betas=(0.9, 0.95), eps=1e-16, weight_decay=1e-5),
+             lr=adam_lr, betas=(0.2, 0.95), eps=1e-16, weight_decay=1e-5),
         dict(params=adam_no_decay_params, use_muon=False,
-             lr=adam_lr, betas=(0.9, 0.95), eps=1e-16, weight_decay=0.0),
+             lr=adam_lr, betas=(0.2, 0.95), eps=1e-16, weight_decay=0.0),
     ]
 
     print(f"Muon params (2D): {sum(p.numel() for p in muon_params):,}")

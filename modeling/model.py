@@ -10,9 +10,11 @@ class ModelConfig:
     hidden_size: int = 512
     intermediate_size_up: int = 1024
     intermediate_size_down: int = 256+128
-    attn_shared_proj_size: int = 1536
     num_decoders: int = 24
     n_attn_heads: int = 16
+    n_kv_heads: int = 4
+    attn_shared_proj_size: int = 768
+    attn_head_proj_size: int = hidden_size // n_kv_heads
 
 class CoolLanguageModelWowExclamationMark(nn.Module):
     def __init__(self, config):
