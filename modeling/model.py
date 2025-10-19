@@ -8,10 +8,11 @@ from .decoder import DecoderLayer
 class ModelConfig:
     vocab_size: int = 50257
     hidden_size: int = 512
-    intermediate_size: int = 1024
+    intermediate_size_up: int = 1024
+    intermediate_size_down: int = 256+128
+    attn_shared_proj_size: int = 1536
     num_decoders: int = 24
     n_attn_heads: int = 16
-    num_features_xorz: int = 1024
 
 class CoolLanguageModelWowExclamationMark(nn.Module):
     def __init__(self, config):
@@ -19,7 +20,7 @@ class CoolLanguageModelWowExclamationMark(nn.Module):
         self.embedding = nn.Embedding(config.vocab_size, config.hidden_size)
 
         self.layers = nn.ModuleList([
-            DecoderLayer(config, layer_idx=i, variant=True, feature_dim=config.num_features_xorz) for i in range(config.num_decoders)
+            DecoderLayer(config, layer_idx=i, variant=True) for i in range(config.num_decoders)
         ])
 
         self.output_layer = nn.Linear(config.hidden_size, config.vocab_size, bias=False)

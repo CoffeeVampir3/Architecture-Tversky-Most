@@ -40,7 +40,7 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained("gpt2")
     tokenizer.pad_token = tokenizer.eos_token
 
-    prompt = "BANG! And"
+    prompt = "She smirked"
     output = generate(model, tokenizer, prompt, max_new_tokens=50, device=device)
 
     print(output)

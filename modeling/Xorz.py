@@ -1,13 +1,29 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
 
 class Xorz(nn.Module):
-    def __init__(self, scale_factor, input_dim, output_dim, feature_dim):
+    def __init__(self, config, layer_idx, intermediate_dim=None, shared_features=None):
         super().__init__()
-        self.features = nn.Parameter(torch.empty(feature_dim, input_dim))
-        self.output_features = nn.Parameter(torch.empty(output_dim, feature_dim))
-        self.scale_factor = scale_factor
+        intermediate_size = intermediate_dim
+        if shared_features is not None:
+            intermediate_size = shared_features.shape[1]
+            self.output_features = shared_features
+        else:
+            self.output_features = nn.Parameter(torch.empty(config.hidden_size, intermediate_size))
+
+        self.features = nn.Parameter(torch.empty(intermediate_size, config.hidden_size))
+        self.had_shared_features = shared_features
+
+        # [ln(x + 1) / 2] + 1 -> ~[1, 2.5] scale factor for 0-23
+        self.scale_factor = ((torch.log(torch.tensor(layer_idx + 1, dtype=torch.float)) / 2) + 1).item()
+        self.scale = nn.Parameter(torch.ones(1, dtype=torch.bfloat16))
+        self.alpha = nn.Parameter(torch.zeros(1, dtype=torch.bfloat16))
+
+        self.half_pi = math.pi / 2
+        self.inv_pi = 1 / math.pi
+
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -17,10 +33,14 @@ class Xorz(nn.Module):
         full_scale_f = unit_scale_f
         full_scale_o = unit_scale_o
         nn.init.uniform_(self.features, -full_scale_f, full_scale_f)
-        nn.init.uniform_(self.output_features, -full_scale_o, full_scale_o)
+        if self.had_shared_features is None:
+            nn.init.uniform_(self.output_features, -full_scale_o, full_scale_o)
 
     def forward(self, x):
         A = x @ self.features.T
-        sigma = torch.sigmoid(2 * A)
-        combined = sigma * (A + 2) - 1
-        return combined @ self.output_features.T
+        gate_base = (torch.arctan(A) + self.half_pi) * self.inv_pi
+        gate = gate_base * (1 + 2 * self.alpha) - self.alpha
+        combined = gate * (A + 2) - 1
+        # sigma = torch.sigmoid(2 * A)
+        # combined = sigma * (A + 2) - 1
+        return self.scale * (combined @ self.output_features.T)

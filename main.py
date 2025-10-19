@@ -96,7 +96,7 @@ def build_muon_optimizer(model, muon_lr=0.02, adam_lr=2e-4):
 
     param_groups = [
         dict(params=muon_params, use_muon=True,
-             lr=muon_lr, momentum=0.95, beta2=0.95, weight_decay=1e-4),
+             lr=muon_lr, momentum=0.95, beta2=0.95, weight_decay=1e-1),
         dict(params=adam_1d_params, use_muon=False,
              lr=adam_lr, betas=(0.9, 0.95), eps=1e-16, weight_decay=1e-5),
         dict(params=adam_no_decay_params, use_muon=False,
@@ -142,7 +142,7 @@ def save_rolling_checkpoint(model, optimizer, global_step, epoch, checkpoint_dir
 def train(model, train_dataset, tokenizer, num_epochs=1, batch_size=24, learning_rate=1e-4, accumulation_steps=3):
     device = torch.device("cuda")
     model.to(device)
-    optimizer = build_muon_optimizer(model, muon_lr=1e-3, adam_lr=1e-4)
+    optimizer = build_muon_optimizer(model, muon_lr=1e-3, adam_lr=4e-4)
     optimizer.preallocate_state()
     logger = TBLogger(
         log_dir='logs/current_run',
